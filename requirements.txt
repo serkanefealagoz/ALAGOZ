@@ -1,6 +1,7 @@
 Flask
 Flask-SocketIO
-eventlet
 Flask-SQLAlchemy
 Flask-Login
 Werkzeug
+gevent
+gevent-websocket
