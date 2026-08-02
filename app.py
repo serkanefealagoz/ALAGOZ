@@ -1,5 +1,5 @@
 from flask import Flask, render_template, redirect, url_for, request, flash
-from flask_socketio import SocketIO, emit, join_room
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -7,15 +7,18 @@ import random
 import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'alagoz-whatsapp-gizli-anahtar'
+app.config['SECRET_KEY'] = 'alagoz-profesyonel-gizli-anahtar'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 
 db = SQLAlchemy(app)
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Aktif/Online kullanıcıları takip etmek için sözlük (sid -> user_id)
+online_users = {}
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -39,7 +42,7 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        custom_id = request.form.get('custom_id').strip()
+        custom_id = request.form.get('custom_id', '').strip()
         password = request.form.get('password')
         
         user = User.query.filter_by(custom_id=custom_id).first()
@@ -54,10 +57,9 @@ def login():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form.get('username').strip()
+        username = request.form.get('username', '').strip()
         password = request.form.get('password')
         
-        # 6 haneli benzersiz kimlik numarası üret
         generated_id = str(random.randint(100000, 999999))
         while User.query.filter_by(custom_id=generated_id).first():
             generated_id = str(random.randint(100000, 999999))
@@ -67,7 +69,7 @@ def register():
         db.session.add(new_user)
         db.session.commit()
         
-        flash(f'Kayıt başarılı! Size özel Kimlik Numaranız: {generated_id} (Giriş için bunu kullanın)', 'success')
+        flash(f'Kayıt başarılı! Size özel Kimlik Numaranız: {generated_id}', 'success')
         return redirect(url_for('login'))
         
     return render_template('register.html')
@@ -76,6 +78,53 @@ def register():
 @login_required
 def chat():
     return render_template('chat.html', current_user=current_user)
+
+@app.route('/get_all_users', methods=['GET'])
+@login_required
+def get_all_users():
+    users = User.query.all()
+    user_list = []
+    for u in users:
+        if u.custom_id != current_user.custom_id:
+            # Online durumunu kontrol et
+            is_online = u.custom_id in online_users.values()
+            user_list.append({
+                'custom_id': u.custom_id,
+                'username': u.username,
+                'online': is_online
+            })
+    return {'success': True, 'users': user_list}
+
+@app.route('/search_user', methods=['GET'])
+@login_required
+def search_user():
+    query_id = request.args.get('id', '').strip()
+    user = User.query.filter_by(custom_id=query_id).first()
+    if user and user.custom_id != current_user.custom_id:
+        is_online = user.custom_id in online_users.values()
+        return {'success': True, 'username': user.username, 'custom_id': user.custom_id, 'online': is_online}
+    return {'success': False, 'message': 'Bu ID ye ait kullanıcı bulunamadı.'}
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# --- WEBSOCKET & SES / MESAJ MANTIĞI ---
+@socketio.on('connect')
+def handle_connect():
+    if current_user.is_authenticated:
+        online_users[request.sid] = current_user.custom_id
+        socketio.emit('update_status', {'custom_id': current_user.custom_id, 'online': True})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    sid = request.sid
+    if sid in online_users:
+        uid = online_users[sid]
+        del online_users[sid]
+        socketio.emit('update_status', {'custom_id': uid, 'online': False})
 
 @socketio.on('join_private_room')
 def on_join(data):
@@ -91,20 +140,11 @@ def handle_private_message(data):
         'msg': data['msg']
     }, room=room)
 
-@app.route('/search_user', methods=['GET'])
-@login_required
-def search_user():
-    query_id = request.args.get('id', '').strip()
-    user = User.query.filter_by(custom_id=query_id).first()
-    if user and user.custom_id != current_user.custom_id:
-        return {'success': True, 'username': user.username, 'custom_id': user.custom_id}
-    return {'success': False, 'message': 'Kullanıcı bulunamadı.'}
-
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('login'))
+# Sesli arama WebRTC sinyalleşmesi (Sesin düzgün akması için)
+@socketio.on('voice_signal')
+def handle_voice_signal(data):
+    room = ''.join(sorted([str(data['sender_id']), str(data['target_id'])]))
+    emit('voice_signal', data, room=room, include_self=False)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
