@@ -6,7 +6,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'cok-gizli-bir-anahtar-kelime'
+app.config['SECRET_KEY'] = 'alagoz-gizli-guvenlik-anahtari'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 
 db = SQLAlchemy(app)
@@ -73,7 +73,6 @@ def register():
 @app.route('/chat')
 @login_required
 def chat():
-    # Sistemdeki tüm kayıtlı kullanıcıları çekip sayfaya gönderiyoruz
     all_users = User.query.all()
     return render_template('chat.html', username=current_user.username, users=all_users)
 
@@ -83,8 +82,15 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
+# --- REAL-TIME SOCKETIO ÖZELLİKLERİ (Mesajlaşma ve Ses) ---
+@socketio.on('send_message')
+def handle_message(data):
+    # Mesajı odadaki herkese gönder
+    emit('receive_message', {'username': data['username'], 'msg': data['msg']}, broadcast=True)
+
 @socketio.on('audio_stream')
 def handle_audio(data):
+    # Ses verisini diğer kullanıcılara aktar
     emit('audio_stream', data, broadcast=True, include_self=False)
 
 if __name__ == '__main__':
