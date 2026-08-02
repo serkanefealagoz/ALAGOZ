@@ -6,7 +6,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'cok-gizli-bir-anahtar-kelime' # Güvenlik için
+app.config['SECRET_KEY'] = 'cok-gizli-bir-anahtar-kelime'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 
 db = SQLAlchemy(app)
@@ -16,7 +16,6 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# Veritabanı Modeli (Kullanıcı Tablosu)
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
@@ -28,8 +27,6 @@ def load_user(user_id):
 
 with app.app_context():
     db.create_all()
-
-# --- SAYFALAR VE ROTALAR ---
 
 @app.route('/')
 def index():
@@ -76,8 +73,9 @@ def register():
 @app.route('/chat')
 @login_required
 def chat():
-    # Burası ferah arayüzün ve asıl uygulamanın çalışacağı yer
-    return render_template('chat.html', username=current_user.username)
+    # Sistemdeki tüm kayıtlı kullanıcıları çekip sayfaya gönderiyoruz
+    all_users = User.query.all()
+    return render_template('chat.html', username=current_user.username, users=all_users)
 
 @app.route('/logout')
 @login_required
@@ -85,7 +83,6 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-# SocketIO Ses / Mesaj Akışları (Senin önceki kodların buraya eklenecek)
 @socketio.on('audio_stream')
 def handle_audio(data):
     emit('audio_stream', data, broadcast=True, include_self=False)
