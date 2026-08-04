@@ -2,7 +2,7 @@ from gevent import monkey
 monkey.patch_all()
 
 from flask import Flask, render_template_string, redirect, url_for, request, flash
-from flask_socketio import SocketIO, emit, join_room
+from flask_socketio import SocketIO, emit, join_room, disconnect
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -20,7 +20,8 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-online_users = set()
+# Aktif socket oturumlarını ve eşleşen custom_id'leri takip eden güvenli sözlük
+active_sessions = {}
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -152,7 +153,7 @@ CHAT_TEMPLATE = """
         let incomingCallerId = null;
         let globalUsers = [];
 
-        // Güçlendirilmiş STUN Sunucu Havuzu (Cihazların birbirini görmesini sağlar)
+        // Güçlendirilmiş STUN Sunucu Havuzu
         const iceServers = { 
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -162,7 +163,8 @@ CHAT_TEMPLATE = """
         };
 
         socket.on('connect', () => {
-            console.log("Socket aktif. ID:", myId);
+            console.log("Socket aktif. ID bildiriliyor:", myId);
+            socket.emit('register_socket', { custom_id: myId });
         });
 
         function fetchUsers() {
@@ -212,7 +214,7 @@ CHAT_TEMPLATE = """
             renderUsers(globalUsers);
         }
 
-        setInterval(fetchUsers, 4000);
+        setInterval(fetchUsers, 3000);
         fetchUsers();
 
         function startChat(id, name, isOnline) {
@@ -306,7 +308,6 @@ CHAT_TEMPLATE = """
         socket.on('voice', async data => {
             if(data.type === 'offer') {
                 incomingCallerId = data.sender_id;
-                // Arayan kişinin ismini listeden bul ve ekranda göster
                 const callerObj = globalUsers.find(u => u.custom_id === data.sender_id);
                 const callerDisplayName = callerObj ? callerObj.username : `ID: ${data.sender_id}`;
                 
@@ -477,7 +478,6 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
             login_user(user)
-            online_users.add(user.custom_id)
             return redirect(url_for('chat'))
         else:
             flash('Kullanıcı adı veya şifre hatalı!', 'danger')
@@ -510,7 +510,6 @@ def register():
 @app.route('/chat')
 @login_required
 def chat():
-    online_users.add(current_user.custom_id)
     return render_template_string(CHAT_TEMPLATE, current_user=current_user)
 
 @app.route('/get_users')
@@ -523,19 +522,31 @@ def get_users():
             result.append({
                 'custom_id': u.custom_id,
                 'username': u.username,
-                'online': u.custom_id in online_users
+                'online': u.custom_id in active_sessions.values()
             })
     return {'success': True, 'users': result}
 
 @app.route('/logout')
 @login_required
 def logout():
-    if current_user.is_authenticated:
-        online_users.discard(current_user.custom_id)
+    # Socket oturumlarını temizle
+    sid_to_remove = [sid for sid, cid in active_sessions.items() if cid == current_user.custom_id]
+    for sid in sid_to_remove:
+        active_sessions.pop(sid, None)
     logout_user()
     return redirect(url_for('login'))
 
 # --- SOCKET.IO KANALLARI ---
+
+@socketio.on('register_socket')
+def handle_register_socket(data):
+    custom_id = data.get('custom_id')
+    if custom_id:
+        active_sessions[request.sid] = custom_id
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    active_sessions.pop(request.sid, None)
 
 def get_room_name(id1, id2):
     return '_'.join(sorted([str(id1), str(id2)]))
