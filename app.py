@@ -32,10 +32,9 @@ def load_user(user_id):
 with app.app_context():
     db.create_all()
 
-# Aktif Soket Bağlantıları Hafızası
 active_sockets = {}
 
-# --- GİRİŞ / KAYIT / ŞİFREYİ UNUTTUM ORTAK ŞABLON (FÜTÜRİSTİK MAVİ-BEYAZ DENGELİ) ---
+# --- GİRİŞ / KAYIT / ŞİFREYİ UNUTTUM (ŞIK, ANTRASİT & PROFESYONEL GUI) ---
 AUTH_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -50,19 +49,17 @@ AUTH_TEMPLATE = """
         .logo-font { font-family: 'Orbitron', sans-serif; letter-spacing: 2px; }
     </style>
 </head>
-<body class="bg-[#121c33] text-slate-100 h-screen flex items-center justify-center overflow-hidden relative selection:bg-blue-500 selection:text-white">
-    <!-- Dengeli Arka Plan Efekti -->
-    <div class="absolute -top-32 -left-32 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="absolute -bottom-32 -right-32 w-96 h-96 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none"></div>
+<body class="bg-[#0b0f19] text-slate-100 h-screen flex items-center justify-center overflow-hidden relative selection:bg-cyan-500 selection:text-white">
+    <div class="absolute -top-32 -left-32 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute -bottom-32 -right-32 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
-    <div class="w-full max-w-md p-8 bg-[#1a2642]/90 backdrop-blur-xl border border-blue-500/30 rounded-3xl shadow-2xl relative z-10 mx-4">
+    <div class="w-full max-w-md p-8 bg-[#131825] border border-slate-800 rounded-3xl shadow-2xl relative z-10 mx-4">
         
-        <!-- Fütüristik Kurumsal ALAGÖZ Logosu -->
         <div class="text-center mb-8">
-            <h1 class="logo-font text-2xl font-black bg-gradient-to-r from-white via-blue-200 to-blue-400 bg-clip-text text-transparent drop-shadow-md">ALAGÖZ</h1>
-            <p class="text-xs text-blue-200/70 font-medium tracking-wide mt-1">
-                {% if request.path == '/login' %} Güvenli Oturum Paneli
-                {% elif request.path == '/register' %} Yeni Hesap Oluşturma Merkezi
+            <h1 class="logo-font text-2xl font-black text-white tracking-widest">ALAGÖZ</h1>
+            <p class="text-xs text-slate-400 font-medium mt-1">
+                {% if request.path == '/login' %} Oturum Açma Paneli
+                {% elif request.path == '/register' %} Yeni Hesap Kayıt Merkezi
                 {% else %} Şifre Kurtarma Modülü {% endif %}
             </p>
         </div>
@@ -70,7 +67,7 @@ AUTH_TEMPLATE = """
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="mb-5 p-3.5 {% if category == 'success' %}bg-emerald-500/20 border-emerald-500/40 text-emerald-300{% else %}bg-rose-500/20 border-rose-500/40 text-rose-300{% endif %} border text-xs rounded-xl text-center font-medium shadow-sm">
+                    <div class="mb-5 p-3.5 {% if category == 'success' %}bg-emerald-500/10 border-emerald-500/30 text-emerald-400{% else %}bg-rose-500/10 border-rose-500/30 text-rose-400{% endif %} border text-xs rounded-xl text-center font-medium">
                         {{ message }}
                     </div>
                 {% endfor %}
@@ -79,38 +76,37 @@ AUTH_TEMPLATE = """
 
         <form method="POST" class="space-y-4">
             <div>
-                <label class="block text-[11px] font-bold text-blue-200 uppercase tracking-wider mb-1.5">Kullanıcı Adı</label>
-                <input type="text" name="username" required autocomplete="off" class="w-full px-4 py-3.5 bg-[#121c33] border border-blue-500/40 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition shadow-inner">
+                <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">Kullanıcı Adı</label>
+                <input type="text" name="username" required autocomplete="off" class="w-full px-4 py-3.5 bg-[#0b0f19] border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition shadow-inner">
             </div>
 
             {% if request.path != '/forgot-password' %}
             <div>
-                <label class="block text-[11px] font-bold text-blue-200 uppercase tracking-wider mb-1.5">Şifre</label>
-                <input type="password" name="password" required class="w-full px-4 py-3.5 bg-[#121c33] border border-blue-500/40 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition shadow-inner">
+                <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">Şifre</label>
+                <input type="password" name="password" required class="w-full px-4 py-3.5 bg-[#0b0f19] border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition shadow-inner">
             </div>
             {% else %}
             <div>
-                <label class="block text-[11px] font-bold text-blue-200 uppercase tracking-wider mb-1.5">Yeni Şifre Belirle</label>
-                <input type="password" name="new_password" required class="w-full px-4 py-3.5 bg-[#121c33] border border-blue-500/40 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition shadow-inner">
+                <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">Yeni Şifre Belirle</label>
+                <input type="password" name="new_password" required class="w-full px-4 py-3.5 bg-[#0b0f19] border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition shadow-inner">
             </div>
             {% endif %}
 
-            <button type="submit" class="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-blue-600/30 cursor-pointer mt-2 border border-blue-400/30">
-                {% if request.path == '/login' %} Sisteme Giriş Yap
-                {% elif request.path == '/register' %} Hesabı Hemen Oluştur
-                {% else %} Şifreyi Güncelle ve Sıfırla {% endif %}
+            <button type="submit" class="w-full py-3.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-cyan-600/20 cursor-pointer mt-2">
+                {% if request.path == '/login' %} Giriş Yap
+                {% elif request.path == '/register' %} Kayıt Ol ve Başla
+                {% else %} Şifreyi Sıfırla {% endif %}
             </button>
         </form>
 
-        <!-- Ekstra Bağlantılar (Şifremi Unuttum & Ekran Değiştirme) -->
-        <div class="mt-6 pt-4 border-t border-blue-500/20 text-center space-y-2.5">
+        <div class="mt-6 pt-4 border-t border-slate-800 text-center space-y-2.5">
             {% if request.path == '/login' %}
-                <p class="text-xs text-slate-300">Şifrenizi mi unuttunuz? <a href="/forgot-password" class="text-blue-300 font-bold hover:underline">Şifreyi Sıfırla</a></p>
-                <p class="text-xs text-slate-300">Hesabınız yok mu? <a href="/register" class="text-white font-bold underline hover:text-blue-300">Kayıt Ol Ekranına Git</a></p>
+                <p class="text-xs text-slate-400">Şifrenizi mi unuttunuz? <a href="/forgot-password" class="text-cyan-400 font-bold hover:underline">Şifreyi Sıfırla</a></p>
+                <p class="text-xs text-slate-400">Hesabınız yok mu? <a href="/register" class="text-white font-bold hover:underline">Kayıt Ol</a></p>
             {% elif request.path == '/register' %}
-                <p class="text-xs text-slate-300">Zaten hesabınız var mı? <a href="/login" class="text-white font-bold underline hover:text-blue-300">Normal Giriş Yap</a></p>
+                <p class="text-xs text-slate-400">Zaten hesabınız var mı? <a href="/login" class="text-white font-bold hover:underline">Giriş Yap</a></p>
             {% else %}
-                <p class="text-xs text-slate-300">Şifrenizi hatırladınız mı? <a href="/login" class="text-blue-300 font-bold hover:underline">Giriş Ekranına Dön</a></p>
+                <p class="text-xs text-slate-400">Şifrenizi hatırladınız mı? <a href="/login" class="text-cyan-400 font-bold hover:underline">Giriş Ekranına Dön</a></p>
             {% endif %}
         </div>
     </div>
@@ -118,14 +114,14 @@ AUTH_TEMPLATE = """
 </html>
 """
 
-# --- CHAT ARAYÜZÜ (KURUMSAL MAVİ-BEYAZ & KESİN ÇÖZÜMLÜ SES MOTORU) ---
+# --- CHAT ARAYÜZÜ (ANTRASİT & EKRAN ÇAĞRI PANELİ İLE) ---
 CHAT_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALAGÖZ — Kurumsal İletişim Ağı</title>
+    <title>ALAGÖZ — İletişim Ağı</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -134,25 +130,25 @@ CHAT_TEMPLATE = """
         .logo-font { font-family: 'Orbitron', sans-serif; letter-spacing: 1.5px; }
         .custom-scroll::-webkit-scrollbar { width: 5px; }
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #3b82f640; border-radius: 10px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #262c3d; border-radius: 10px; }
     </style>
 </head>
-<body class="bg-[#121c33] text-slate-100 h-screen flex flex-col overflow-hidden selection:bg-blue-500 selection:text-white">
+<body class="bg-[#0b0f19] text-slate-100 h-screen flex flex-col overflow-hidden selection:bg-cyan-500 selection:text-white">
     
-    <!-- Üst Kurumsal Bar -->
-    <header class="bg-[#1a2642] border-b border-blue-500/20 px-6 py-3.5 flex justify-between items-center shadow-lg z-20">
+    <!-- Üst Bar -->
+    <header class="bg-[#131825] border-b border-slate-800 px-6 py-3.5 flex justify-between items-center shadow-md z-20">
         <div class="flex items-center gap-3.5">
-            <div class="logo-font text-lg font-black text-white tracking-widest bg-blue-600/30 px-3 py-1.5 rounded-xl border border-blue-400/30">ALAGÖZ</div>
+            <div class="logo-font text-base font-black text-white tracking-widest bg-cyan-500/10 border border-cyan-500/20 px-3 py-1.5 rounded-xl text-cyan-400">ALAGÖZ</div>
             <div>
                 <p class="text-xs text-white font-semibold">{{ current_user.username }}</p>
-                <p class="text-[10px] text-blue-200/70 font-mono">ID: {{ current_user.custom_id }}</p>
+                <p class="text-[10px] text-slate-400 font-mono">ID: {{ current_user.custom_id }}</p>
             </div>
         </div>
         <div class="flex items-center gap-3">
-            <span class="px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 rounded-xl text-[11px] font-medium flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Sistem Aktif
+            <span class="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-[11px] font-medium flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Sistem Çevrimiçi
             </span>
-            <a href="/logout" class="bg-rose-500/15 text-rose-300 hover:bg-rose-500 hover:text-white px-3.5 py-2 rounded-xl text-xs font-medium transition border border-rose-500/30 flex items-center gap-1.5 shadow-sm">
+            <a href="/logout" class="bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white px-3.5 py-2 rounded-xl text-xs font-medium transition border border-rose-500/20 flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"/></svg>
                 Çıkış
             </a>
@@ -163,48 +159,47 @@ CHAT_TEMPLATE = """
     <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
         
         <!-- Sol Kenar Çubuğu (Kullanıcı Listesi) -->
-        <aside class="w-full md:w-80 bg-[#16213b] border-r border-blue-500/20 flex flex-col p-4 gap-3.5">
+        <aside class="w-full md:w-80 bg-[#0e1320] border-r border-slate-800 flex flex-col p-4 gap-3.5">
             <div class="relative">
-                <input type="text" id="search-id-input" oninput="filterUsers()" placeholder="Kullanıcı veya ID ara..." class="w-full pl-9 pr-3.5 py-2.5 bg-[#121c33] border border-blue-500/30 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-400 transition shadow-inner">
-                <svg class="w-4 h-4 text-blue-300/60 absolute left-3 top-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+                <input type="text" id="search-id-input" oninput="filterUsers()" placeholder="Kullanıcı veya ID ara..." class="w-full pl-9 pr-3.5 py-2.5 bg-[#0b0f19] border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition shadow-inner">
+                <svg class="w-4 h-4 text-slate-500 absolute left-3 top-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
             </div>
             
-            <div class="text-[10px] font-bold text-blue-200 uppercase tracking-wider px-1 mt-1 flex justify-between items-center">
-                <span>Çevrimiçi Üyeler</span>
-                <span id="user-count" class="bg-blue-600/30 text-blue-200 px-2 py-0.5 rounded-md font-mono">0</span>
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 mt-1 flex justify-between items-center">
+                <span>Aktif Üyeler</span>
+                <span id="user-count" class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md font-mono">0</span>
             </div>
             
             <div id="users-list" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scroll">
-                <p class="text-xs text-slate-400 text-center mt-6">Kullanıcılar yükleniyor...</p>
+                <p class="text-xs text-slate-500 text-center mt-6">Kullanıcılar yükleniyor...</p>
             </div>
         </aside>
 
-        <!-- Sağ Alan (Sohbet ve Sesli Görüşme) -->
-        <section class="flex-1 flex flex-col bg-[#121c33] relative">
-            <div id="chat-header" class="px-6 py-3.5 bg-[#1a2642]/80 backdrop-blur-md border-b border-blue-500/20 text-xs font-semibold text-white hidden flex justify-between items-center z-10">
+        <!-- Sağ Alan (Sohbet) -->
+        <section class="flex-1 flex flex-col bg-[#0b0f19] relative">
+            <div id="chat-header" class="px-6 py-3.5 bg-[#131825] border-b border-slate-800 text-xs font-semibold text-slate-300 hidden flex justify-between items-center z-10">
                 <span id="active-chat-title" class="flex items-center gap-2.5 text-white font-semibold">Sohbet Seçilmedi</span>
                 <div class="flex items-center gap-3">
-                    <span id="call-status-badge" class="hidden px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-[11px] font-mono animate-pulse">Ses Bağlantısı Kuruldu</span>
-                    <button id="call-btn" onclick="toggleAudioCall()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition shadow-lg shadow-emerald-600/25 flex items-center gap-2 cursor-pointer border border-emerald-400/30">
+                    <button id="call-btn" onclick="toggleAudioCall()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition shadow-lg shadow-emerald-600/20 flex items-center gap-2 cursor-pointer">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
-                        Sesli Arama
+                        Sesli Arama Başlat
                     </button>
                 </div>
             </div>
 
-            <!-- Ses Çalma Elementi -->
+            <!-- Ses Akış Elementi -->
             <audio id="remote-audio" autoplay playsinline></audio>
 
             <div id="chat-messages" class="flex-1 p-6 overflow-y-auto space-y-3.5 flex flex-col custom-scroll">
                 <div class="m-auto text-center space-y-3 max-w-sm">
-                    <div class="logo-font text-xl text-blue-300 font-black tracking-widest">ALAGÖZ</div>
-                    <p class="text-xs text-slate-300 font-medium leading-relaxed">Sol panelden bir kullanıcı seçerek güvenli şifreli mesajlaşmaya veya sesli görüşmeye başlayın.</p>
+                    <div class="logo-font text-xl text-cyan-400 font-black tracking-widest">ALAGÖZ</div>
+                    <p class="text-xs text-slate-400 font-medium leading-relaxed">Sol panelden bir kullanıcı seçerek güvenli mesajlaşmaya başlayın.</p>
                 </div>
             </div>
 
-            <form id="chat-form" onsubmit="sendPrivateMessage(event)" class="p-4 bg-[#1a2642]/80 backdrop-blur-md border-t border-blue-500/20 flex gap-3 hidden z-10">
-                <input type="text" id="message-input" autocomplete="off" placeholder="Mesajınızı şifreli olarak gönderin..." class="flex-1 px-4 py-3 bg-[#121c33] border border-blue-500/30 rounded-xl text-xs focus:outline-none focus:border-blue-400 text-white placeholder-slate-400 transition shadow-inner">
-                <button type="submit" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition shadow-lg shadow-blue-600/25 flex items-center gap-1.5 cursor-pointer border border-blue-400/30">
+            <form id="chat-form" onsubmit="sendPrivateMessage(event)" class="p-4 bg-[#131825] border-t border-slate-800 flex gap-3 hidden z-10">
+                <input type="text" id="message-input" autocomplete="off" placeholder="Mesajınızı yazın..." class="flex-1 px-4 py-3 bg-[#0b0f19] border border-slate-800 rounded-xl text-xs focus:outline-none focus:border-cyan-500 text-white placeholder-slate-500 transition shadow-inner">
+                <button type="submit" class="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-semibold transition shadow-lg shadow-cyan-600/20 flex items-center gap-1.5 cursor-pointer">
                     Gönder
                     <svg class="w-3.5 h-3.5 rotate-90" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg>
                 </button>
@@ -212,13 +207,29 @@ CHAT_TEMPLATE = """
         </section>
     </div>
 
-    <!-- GELEN ARAMA MODALI -->
-    <div id="incoming-call-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-[#1a2642] border border-blue-500/40 p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center space-y-6">
-            <div class="w-20 h-20 rounded-full bg-blue-600/20 border-2 border-blue-400/50 flex items-center justify-center mx-auto text-blue-300 text-2xl font-bold shadow-xl shadow-blue-600/30 animate-pulse">📞</div>
+    <!-- AKTİF SESLİ GÖRÜŞME EKRANI (TAM EKRAN MODAL) -->
+    <div id="active-call-screen" class="fixed inset-0 bg-[#0b0f19]/95 backdrop-blur-xl z-50 hidden flex flex-col items-center justify-center p-6 space-y-8">
+        <div class="w-28 h-28 rounded-full bg-cyan-500/10 border-2 border-cyan-500/40 flex items-center justify-center text-cyan-400 text-4xl shadow-2xl animate-pulse">🎙️</div>
+        <div class="text-center space-y-2">
+            <h2 class="text-xl font-bold text-white" id="active-call-username">Kullanıcı</h2>
+            <p class="text-xs text-emerald-400 font-mono tracking-wider">SESLİ BAĞLANTI AKTİF</p>
+            <p class="text-sm text-slate-400 font-mono" id="call-timer">00:00</p>
+        </div>
+        <div class="flex items-center gap-6 pt-4">
+            <button onclick="hangUp()" class="px-8 py-4 bg-rose-600 hover:bg-rose-500 text-white rounded-2xl text-sm font-bold shadow-xl shadow-rose-600/30 flex items-center gap-3 transition transform hover:scale-105 cursor-pointer">
+                <svg class="w-5 h-5 rotate-135" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
+                Aramayı Sonlandır
+            </button>
+        </div>
+    </div>
+
+    <!-- GELEN ÇAĞRI MODALI -->
+    <div id="incoming-call-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-[#131825] border border-slate-800 p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center space-y-6">
+            <div class="w-20 h-20 rounded-full bg-cyan-500/10 border-2 border-cyan-500/40 flex items-center justify-center mx-auto text-cyan-400 text-2xl font-bold shadow-xl animate-bounce">📞</div>
             <div>
                 <h2 class="text-base font-bold text-white" id="caller-name">Arayan Kişi</h2>
-                <p class="text-xs text-blue-300 font-mono mt-1">Gelen Şifreli Sesli Çağrı...</p>
+                <p class="text-xs text-cyan-400 font-mono mt-1">Gelen Sesli Çağrı...</p>
             </div>
             <div class="flex justify-center gap-8 pt-2">
                 <button onclick="rejectCall()" class="w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg shadow-rose-600/40 transition transform hover:scale-105 cursor-pointer">
@@ -231,7 +242,7 @@ CHAT_TEMPLATE = """
         </div>
     </div>
 
-    <!-- KESİN ÇÖZÜMLÜ WEBRTC SES MOTORU -->
+    <!-- WEBRTC & SOKET KONTROLÜ -->
     <script>
         const socket = io();
         const myId = "{{ current_user.custom_id }}";
@@ -243,6 +254,8 @@ CHAT_TEMPLATE = """
         let inCall = false;
         let incomingCallerId = null;
         let globalUsers = [];
+        let callTimerInterval = null;
+        let callSeconds = 0;
 
         const iceServers = { 
             iceServers: [
@@ -274,26 +287,26 @@ CHAT_TEMPLATE = """
             const filtered = users.filter(u => (u.username.toLowerCase().includes(searchVal) || u.custom_id.includes(searchVal)) && u.custom_id !== myId);
 
             if(filtered.length === 0) {
-                listDiv.innerHTML = '<p class="text-xs text-slate-400 text-center mt-6">Başka kullanıcı bulunamadı.</p>';
+                listDiv.innerHTML = '<p class="text-xs text-slate-500 text-center mt-6">Kullanıcı bulunamadı.</p>';
                 return;
             }
             listDiv.innerHTML = '';
             filtered.forEach(u => {
                 const item = document.createElement('div');
-                item.className = `p-3 rounded-xl border cursor-pointer transition flex items-center justify-between group ${targetId === u.custom_id ? 'bg-blue-600/20 border-blue-400/50' : 'bg-[#121c33] border-blue-500/20 hover:bg-[#1a2642]'}`;
+                item.className = `p-3 rounded-xl border cursor-pointer transition flex items-center justify-between group ${targetId === u.custom_id ? 'bg-cyan-500/10 border-cyan-500/40' : 'bg-[#131825] border-slate-800 hover:bg-[#1a2233]'}`;
                 item.onclick = () => startChat(u.custom_id, u.username, u.online);
                 item.innerHTML = `
                     <div class="flex items-center gap-3">
-                        <div class="relative w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center font-bold text-blue-200 text-xs">
+                        <div class="relative w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-slate-200 text-xs">
                             ${u.username[0].toUpperCase()}
-                            <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#16213b] ${u.online ? 'bg-emerald-400' : 'bg-slate-500'}"></span>
+                            <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0e1320] ${u.online ? 'bg-emerald-400' : 'bg-slate-600'}"></span>
                         </div>
                         <div>
-                            <p class="text-xs font-semibold text-white group-hover:text-blue-300 transition">${u.username}</p>
-                            <p class="text-[10px] text-blue-200/60 font-mono">ID: ${u.custom_id}</p>
+                            <p class="text-xs font-semibold text-white group-hover:text-cyan-400 transition">${u.username}</p>
+                            <p class="text-[10px] text-slate-400 font-mono">ID: ${u.custom_id}</p>
                         </div>
                     </div>
-                    <span class="text-[10px] text-blue-200 bg-[#121c33] px-2 py-1 rounded-lg border border-blue-500/30">Seç</span>
+                    <span class="text-[10px] text-slate-300 bg-[#0b0f19] px-2 py-1 rounded-lg border border-slate-800">Seç</span>
                 `;
                 listDiv.appendChild(item);
             });
@@ -309,10 +322,10 @@ CHAT_TEMPLATE = """
         function startChat(id, name, isOnline) {
             targetId = id;
             targetName = name;
-            document.getElementById('active-chat-title').innerHTML = `💬 ${name} (ID: ${id}) — <span class="${isOnline ? 'text-emerald-400 font-medium' : 'text-slate-400'}">${isOnline ? '● Çevrimiçi' : '○ Çevrimdışı'}</span>`;
+            document.getElementById('active-chat-title').innerHTML = `💬 ${name} (ID: ${id}) — <span class="${isOnline ? 'text-emerald-400 font-medium' : 'text-slate-500'}">${isOnline ? '● Çevrimiçi' : '○ Çevrimdışı'}</span>`;
             document.getElementById('chat-header').classList.remove('hidden');
             document.getElementById('chat-form').classList.remove('hidden');
-            document.getElementById('chat-messages').innerHTML = `<div class="text-center text-xs text-blue-200/60 my-2">-- ${name} ile güvenli kanal açıldı --</div>`;
+            document.getElementById('chat-messages').innerHTML = `<div class="text-center text-xs text-slate-500 my-2">-- ${name} ile güvenli kanal açıldı --</div>`;
             
             socket.emit('join_room_private', { user1: myId, user2: targetId });
             renderUsers(globalUsers);
@@ -340,7 +353,7 @@ CHAT_TEMPLATE = """
             const div = document.createElement('div');
             div.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'} mb-2.5`;
             div.innerHTML = `
-                <div class="px-4 py-2.5 rounded-2xl max-w-xs text-xs shadow-md ${isMe ? 'bg-blue-600 text-white rounded-br-none border border-blue-400/30' : 'bg-[#1a2642] border border-blue-500/30 text-white rounded-bl-none'}">
+                <div class="px-4 py-2.5 rounded-2xl max-w-xs text-xs shadow-md ${isMe ? 'bg-cyan-600 text-white rounded-br-none' : 'bg-[#131825] border border-slate-800 text-slate-200 rounded-bl-none'}">
                     ${msg}
                 </div>
             `;
@@ -348,7 +361,7 @@ CHAT_TEMPLATE = """
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // --- WEBRTC SES KÖPRÜSÜ (KESİN ÇÖZÜM) ---
+        // --- WEBRTC SES MOTORU & ÇAĞRI EKRANI ---
         function createPeerConnection() {
             if (peerConnection) return;
             peerConnection = new RTCPeerConnection(iceServers);
@@ -363,7 +376,7 @@ CHAT_TEMPLATE = """
                 const remoteAudio = document.getElementById('remote-audio');
                 if (event.streams && event.streams[0]) {
                     remoteAudio.srcObject = event.streams[0];
-                    remoteAudio.play().catch(err => console.log("Ses oynatma tetikleme hatası:", err));
+                    remoteAudio.play().catch(err => console.log("Ses oynatma hatası:", err));
                 }
             };
 
@@ -379,22 +392,32 @@ CHAT_TEMPLATE = """
             };
         }
 
+        function startCallTimer() {
+            callSeconds = 0;
+            document.getElementById('call-timer').innerText = "00:00";
+            if(callTimerInterval) clearInterval(callTimerInterval);
+            callTimerInterval = setInterval(() => {
+                callSeconds++;
+                let mins = Math.floor(callSeconds / 60).toString().padStart(2, '0');
+                let secs = (callSeconds % 60).toString().padStart(2, '0');
+                document.getElementById('call-timer').innerText = `${mins}:${secs}`;
+            }, 1000);
+        }
+
         async function toggleAudioCall() {
             if (!targetId) {
                 alert("Önce bir kullanıcı seçmelisiniz!");
                 return;
             }
-            const btn = document.getElementById('call-btn');
-            const badge = document.getElementById('call-status-badge');
 
             if(!inCall) {
                 try {
                     localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
                     inCall = true;
                     
-                    btn.className = "px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold transition shadow-lg shadow-rose-600/25 flex items-center gap-2 cursor-pointer border border-rose-400/30";
-                    btn.innerHTML = "🔴 Aramayı Kapat";
-                    badge.classList.remove('hidden');
+                    document.getElementById('active-call-username').innerText = targetName || "Kullanıcı";
+                    document.getElementById('active-call-screen').classList.remove('hidden');
+                    startCallTimer();
 
                     createPeerConnection();
 
@@ -408,7 +431,7 @@ CHAT_TEMPLATE = """
                         sdp: offer 
                     });
                 } catch(err) {
-                    alert("Mikrofon izni reddedildi veya cihazınızda mikrofon bulunamadı!");
+                    alert("Mikrofon izni alınamadı veya cihazda mikrofon bulunamadı!");
                     inCall = false;
                 }
             } else {
@@ -424,6 +447,7 @@ CHAT_TEMPLATE = """
                 
                 const callerObj = globalUsers.find(u => u.custom_id === data.sender_id);
                 const callerDisplayName = callerObj ? callerObj.username : `ID: ${data.sender_id}`;
+                targetName = callerDisplayName;
                 
                 document.getElementById('caller-name').innerText = callerDisplayName;
                 document.getElementById('incoming-call-modal').classList.remove('hidden');
@@ -436,7 +460,7 @@ CHAT_TEMPLATE = """
                     try {
                         await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
                     } catch (e) {
-                        console.log("ICE aday ekleme hatası:", e);
+                        console.log("ICE ekleme hatası:", e);
                     }
                 }
             } else if (data.type === 'hangup') {
@@ -450,11 +474,9 @@ CHAT_TEMPLATE = """
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
                 inCall = true;
                 
-                const btn = document.getElementById('call-btn');
-                const badge = document.getElementById('call-status-badge');
-                btn.className = "px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold transition shadow-lg shadow-rose-600/25 flex items-center gap-2 cursor-pointer border border-rose-400/30";
-                btn.innerHTML = "🔴 Aramayı Kapat";
-                badge.classList.remove('hidden');
+                document.getElementById('active-call-username').innerText = targetName || "Kullanıcı";
+                document.getElementById('active-call-screen').classList.remove('hidden');
+                startCallTimer();
 
                 createPeerConnection();
 
@@ -498,19 +520,12 @@ CHAT_TEMPLATE = """
                 peerConnection.close();
                 peerConnection = null;
             }
+            if(callTimerInterval) clearInterval(callTimerInterval);
+            
             localStream = null;
             inCall = false;
             document.getElementById('incoming-call-modal').classList.add('hidden');
-            document.getElementById('call-status-badge').classList.add('hidden');
-            
-            const btn = document.getElementById('call-btn');
-            if(btn) {
-                btn.className = "px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition shadow-lg shadow-emerald-600/25 flex items-center gap-2 cursor-pointer border border-emerald-400/30";
-                btn.innerHTML = `
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
-                    Sesli Arama
-                `;
-            }
+            document.getElementById('active-call-screen').classList.add('hidden');
         }
     </script>
 </body>
@@ -608,8 +623,6 @@ def get_users():
             'online': u.custom_id in active_sockets
         })
     return jsonify({'success': True, 'users': user_list})
-
-# --- SOCKET.IO HABERLEŞME VE SES KÖPRÜSÜ ---
 
 @socketio.on('register_socket')
 def handle_register(data):
