@@ -1,7 +1,7 @@
 from gevent import monkey
 monkey.patch_all()
 
-from flask import Flask, render_template_string, redirect, url_for, request, flash
+from flask import Flask, render_template_string, redirect, url_for, request, session, flash
 from flask_socketio import SocketIO, emit, join_room
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -10,18 +10,20 @@ import random
 import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'alagoz-enterprise-security-2026'
+app.config['SECRET_KEY'] = 'alagoz-enterprise-security-2026-v2'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Aynı ağdaki cihaz çakışmalarını önlemek için oturum çerez ayarları
+app.config['SESSION_COOKIE_NAME'] = 'alagoz_session'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['REMEMBER_COOKIE_DURATION'] = 86400
 
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent', manage_session=False)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
-
-active_sessions = {}
 
 class User(UserMixin, db.Model):
     __tablename__ = 'user'
@@ -31,6 +33,7 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(255), nullable=False)
     security_question = db.Column(db.String(255), nullable=False)
     security_answer = db.Column(db.String(255), nullable=False)
+    is_online = db.Column(db.Boolean, default=False)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -554,7 +557,9 @@ def login():
         password = request.form.get('password')
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
-            login_user(user)
+            login_user(user, remember=False)
+            user.is_online = True
+            db.session.commit()
             return redirect(url_for('chat'))
         else:
             flash('Kullanıcı adı veya şifre hatalı!', 'danger')
@@ -585,7 +590,8 @@ def register():
             username=username, 
             password=hashed_password,
             security_question=security_question,
-            security_answer=hashed_answer
+            security_answer=hashed_answer,
+            is_online=False
         )
         db.session.add(new_user)
         db.session.commit()
@@ -630,6 +636,8 @@ def forgot_password():
 @app.route('/chat')
 @login_required
 def chat():
+    current_user.is_online = True
+    db.session.commit()
     return render_template_string(CHAT_TEMPLATE, current_user=current_user)
 
 @app.route('/get_users')
@@ -642,16 +650,15 @@ def get_users():
             result.append({
                 'custom_id': u.custom_id,
                 'username': u.username,
-                'online': u.custom_id in active_sessions.values()
+                'online': u.is_online
             })
     return {'success': True, 'users': result}
 
 @app.route('/logout')
 @login_required
 def logout():
-    sid_to_remove = [sid for sid, cid in active_sessions.items() if cid == current_user.custom_id]
-    for sid in sid_to_remove:
-        active_sessions.pop(sid, None)
+    current_user.is_online = False
+    db.session.commit()
     logout_user()
     return redirect(url_for('login'))
 
@@ -661,11 +668,16 @@ def logout():
 def handle_register_socket(data):
     custom_id = data.get('custom_id')
     if custom_id:
-        active_sessions[request.sid] = custom_id
+        user = User.query.filter_by(custom_id=custom_id).first()
+        if user:
+            user.is_online = True
+            db.session.commit()
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    active_sessions.pop(request.sid, None)
+    if current_user.is_authenticated:
+        current_user.is_online = False
+        db.session.commit()
 
 def get_room_name(id1, id2):
     return '_'.join(sorted([str(id1), str(id2)]))
