@@ -2,7 +2,7 @@ from gevent import monkey
 monkey.patch_all()
 
 from flask import Flask, render_template_string, redirect, url_for, request, flash
-from flask_socketio import SocketIO, emit, join_room, disconnect
+from flask_socketio import SocketIO, emit, join_room
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -12,6 +12,7 @@ import os
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'alagoz-enterprise-security-2026'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
@@ -20,20 +21,23 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# Aktif socket oturumlarını ve eşleşen custom_id'leri takip eden güvenli sözlük
 active_sessions = {}
 
 class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    __tablename__ = 'user'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     custom_id = db.Column(db.String(20), unique=True, nullable=False)
     username = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
+    security_question = db.Column(db.String(255), nullable=False)
+    security_answer = db.Column(db.String(255), nullable=False)
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 with app.app_context():
+    db.drop_all()
     db.create_all()
 
 # --- PROFESYONEL ÖN YÜZ (CHAT_TEMPLATE) ---
@@ -153,7 +157,6 @@ CHAT_TEMPLATE = """
         let incomingCallerId = null;
         let globalUsers = [];
 
-        // Güçlendirilmiş STUN Sunucu Havuzu
         const iceServers = { 
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -163,7 +166,6 @@ CHAT_TEMPLATE = """
         };
 
         socket.on('connect', () => {
-            console.log("Socket aktif. ID bildiriliyor:", myId);
             socket.emit('register_socket', { custom_id: myId });
         });
 
@@ -258,7 +260,6 @@ CHAT_TEMPLATE = """
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // --- WEB-RTC SESLİ ARAMA SİSTEMİ ---
         async function startAudioCall() {
             if (!targetId) {
                 alert("Önce bir kullanıcı seçmelisiniz!");
@@ -399,7 +400,7 @@ LOGIN_TEMPLATE = """
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
-              <div class="mb-5 p-3 text-xs rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-center font-medium">{{ message }}</div>
+              <div class="mb-5 p-3 text-xs rounded-xl {% if category == 'danger' %} bg-rose-500/10 text-rose-300 border border-rose-500/20 {% else %} bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 {% endif %} text-center font-medium">{{ message }}</div>
             {% endfor %}
           {% endif %}
         {% endwith %}
@@ -409,7 +410,10 @@ LOGIN_TEMPLATE = """
                 <input type="text" name="username" required placeholder="Kullanıcı adınızı girin" class="w-full px-4 py-3 rounded-xl bg-[#070b14] border border-slate-800 focus:outline-none focus:border-indigo-500 text-xs text-slate-200 transition shadow-inner">
             </div>
             <div>
-                <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Şifre</label>
+                <div class="flex justify-between items-center mb-1.5">
+                    <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Şifre</label>
+                    <a href="/forgot-password" class="text-[11px] text-indigo-400 hover:underline">Şifremi Unuttum?</a>
+                </div>
                 <input type="password" name="password" required placeholder="••••••••" class="w-full px-4 py-3 rounded-xl bg-[#070b14] border border-slate-800 focus:outline-none focus:border-indigo-500 text-xs text-slate-200 transition shadow-inner">
             </div>
             <button type="submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-semibold text-xs transition shadow-lg shadow-indigo-600/30 mt-2 cursor-pointer">Giriş Yap</button>
@@ -454,6 +458,20 @@ REGISTER_TEMPLATE = """
                 <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Şifre</label>
                 <input type="password" name="password" required placeholder="••••••••" class="w-full px-4 py-3 rounded-xl bg-[#070b14] border border-slate-800 focus:outline-none focus:border-indigo-500 text-xs text-slate-200 transition shadow-inner">
             </div>
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Güvenlik Sorusu</label>
+                <select name="security_question" required class="w-full px-4 py-3 rounded-xl bg-[#070b14] border border-slate-800 focus:outline-none focus:border-indigo-500 text-xs text-slate-200 transition shadow-inner cursor-pointer">
+                    <option value="" disabled selected>Bir güvenlik sorusu seçin</option>
+                    <option value="İlk evcil hayvanınızın adı nedir?">İlk evcil hayvanınızın adı nedir?</option>
+                    <option value="En sevdiğiniz çocukluk arkadaşınız kimdir?">En sevdiğiniz çocukluk arkadaşınız kimdir?</option>
+                    <option value="Doğduğunuz şehir neresidir?">Doğduğunuz şehir neresidir?</option>
+                    <option value="Çocuklukta en sevdiğiniz kahraman kimdi?">Çocuklukta en sevdiğiniz kahraman kimdi?</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Güvenlik Sorusu Cevabı</label>
+                <input type="text" name="security_answer" required placeholder="Cevabınız" class="w-full px-4 py-3 rounded-xl bg-[#070b14] border border-slate-800 focus:outline-none focus:border-indigo-500 text-xs text-slate-200 transition shadow-inner">
+            </div>
             <button type="submit" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold text-xs transition shadow-lg shadow-emerald-600/30 mt-2 cursor-pointer">Kayıt Ol ve ID Al</button>
         </form>
         <p class="mt-6 text-center text-xs text-slate-400">Zaten hesabınız var mı? <a href="/login" class="text-indigo-400 hover:underline font-semibold">Giriş Yapın</a></p>
@@ -462,7 +480,66 @@ REGISTER_TEMPLATE = """
 </html>
 """
 
-# --- BACKEND ROTARLARI ---
+FORGOT_PASSWORD_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Şifre Sıfırlama — ALAGÖZ</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-[#070b14] text-slate-100 flex items-center justify-center h-screen px-4 selection:bg-indigo-500 selection:text-white">
+    <div class="bg-[#0b1322] border border-slate-800/80 p-8 rounded-3xl shadow-2xl w-full max-w-md backdrop-blur-xl">
+        <div class="text-center mb-8">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center font-bold text-white shadow-xl shadow-amber-600/30 text-xl mx-auto mb-3">🔒</div>
+            <h1 class="text-xl font-bold tracking-tight text-slate-100">ŞİFREYİ KURTAR</h1>
+            <p class="text-xs text-slate-400 mt-1">Güvenlik sorusu ile yeni şifre belirleyin</p>
+        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="mb-5 p-3 text-xs rounded-xl {% if category == 'danger' %} bg-rose-500/10 text-rose-300 border border-rose-500/20 {% else %} bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 {% endif %} text-center font-medium">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+        
+        <form method="POST" class="space-y-4">
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Kullanıcı Adınız</label>
+                <div class="flex gap-2">
+                    <input type="text" name="username" value="{{ username or '' }}" placeholder="Kullanıcı adınızı yazın" class="flex-1 px-4 py-3 rounded-xl bg-[#070b14] border border-slate-800 focus:outline-none focus:border-indigo-500 text-xs text-slate-200 transition shadow-inner">
+                    {% if not question %}
+                    <button type="submit" name="action" value="get_question" class="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer">Soru Getir</button>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if question %}
+            <div class="p-3 bg-[#070b14] rounded-xl border border-slate-800">
+                <p class="text-[11px] text-slate-400 uppercase font-semibold">Gizli Soru:</p>
+                <p class="text-xs text-indigo-400 font-medium mt-1">{{ question }}</p>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Sorunun Cevabı</label>
+                <input type="text" name="answer" required placeholder="Gizli soru cevabınız" class="w-full px-4 py-3 rounded-xl bg-[#070b14] border border-slate-800 focus:outline-none focus:border-indigo-500 text-xs text-slate-200 transition shadow-inner">
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Yeni Şifre</label>
+                <input type="password" name="new_password" required placeholder="••••••••" class="w-full px-4 py-3 rounded-xl bg-[#070b14] border border-slate-800 focus:outline-none focus:border-indigo-500 text-xs text-slate-200 transition shadow-inner">
+            </div>
+            <button type="submit" name="action" value="reset_password" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold text-xs transition shadow-lg shadow-emerald-600/30 mt-2 cursor-pointer">Şifreyi Güncelle</button>
+            {% endif %}
+        </form>
+        <p class="mt-6 text-center text-xs text-slate-400"><a href="/login" class="text-indigo-400 hover:underline font-semibold">← Giriş Ekranına Dön</a></p>
+    </div>
+</body>
+</html>
+"""
+
+# --- BACKEND ROTALARI ---
 
 @app.route('/')
 def index():
@@ -488,6 +565,8 @@ def register():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password')
+        security_question = request.form.get('security_question')
+        security_answer = request.form.get('security_answer', '').strip().lower()
         
         existing_user = User.query.filter_by(username=username).first()
         if existing_user:
@@ -499,13 +578,54 @@ def register():
             generated_id = str(random.randint(100000, 999999))
             
         hashed_password = generate_password_hash(password)
-        new_user = User(custom_id=generated_id, username=username, password=hashed_password)
+        hashed_answer = generate_password_hash(security_answer)
+        
+        new_user = User(
+            custom_id=generated_id, 
+            username=username, 
+            password=hashed_password,
+            security_question=security_question,
+            security_answer=hashed_answer
+        )
         db.session.add(new_user)
         db.session.commit()
         
         flash(f'Kayıt Başarılı! Otomatik ID Numaranız: {generated_id}. Şimdi giriş yapabilirsiniz.', 'success')
         return redirect(url_for('login'))
     return render_template_string(REGISTER_TEMPLATE)
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    question = None
+    username = None
+    if request.method == 'POST':
+        action = request.form.get('action')
+        username = request.form.get('username', '').strip()
+        user = User.query.filter_by(username=username).first()
+        
+        if not user:
+            flash('Bu kullanıcı adıyla kayıtlı bir hesap bulunamadı!', 'danger')
+            return render_template_string(FORGOT_PASSWORD_TEMPLATE, question=None, username=username)
+            
+        if action == 'get_question':
+            question = user.security_question
+            return render_template_string(FORGOT_PASSWORD_TEMPLATE, question=question, username=username)
+            
+        elif action == 'reset_password':
+            question = user.security_question
+            answer = request.form.get('answer', '').strip().lower()
+            new_password = request.form.get('new_password')
+            
+            if check_password_hash(user.security_answer, answer):
+                user.password = generate_password_hash(new_password)
+                db.session.commit()
+                flash('Şifreniz başarıyla güncellendi! Yeni şifrenizle giriş yapabilirsiniz.', 'success')
+                return redirect(url_for('login'))
+            else:
+                flash('Güvenlik sorusu cevabı hatalı!', 'danger')
+                return render_template_string(FORGOT_PASSWORD_TEMPLATE, question=question, username=username)
+                
+    return render_template_string(FORGOT_PASSWORD_TEMPLATE, question=None, username=None)
 
 @app.route('/chat')
 @login_required
@@ -518,7 +638,7 @@ def get_users():
     users = User.query.all()
     result = []
     for u in users:
-        if u.custom_id != current_user.custom_id:
+        if u.id != current_user.id:
             result.append({
                 'custom_id': u.custom_id,
                 'username': u.username,
@@ -529,7 +649,6 @@ def get_users():
 @app.route('/logout')
 @login_required
 def logout():
-    # Socket oturumlarını temizle
     sid_to_remove = [sid for sid, cid in active_sessions.items() if cid == current_user.custom_id]
     for sid in sid_to_remove:
         active_sessions.pop(sid, None)
