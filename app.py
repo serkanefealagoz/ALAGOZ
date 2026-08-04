@@ -2,7 +2,7 @@ from gevent import monkey
 monkey.patch_all()
 
 from flask import Flask, render_template_string, redirect, url_for, request, flash
-from flask_socketio import SocketIO, emit, join_room
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,11 +10,10 @@ import random
 import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'alagoz-kesin-cozum-anahtari'
+app.config['SECRET_KEY'] = 'alagoz-kesin-cozum-anahtari-2026'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 
 db = SQLAlchemy(app)
-# Gevent async mode aktif edildi (Cihazların birbirini görmesini sağlayan kritik ayar)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 login_manager = LoginManager()
@@ -36,14 +35,14 @@ def load_user(user_id):
 with app.app_context():
     db.create_all()
 
-# --- HTML / ARAYÜZ ŞABLONU ---
+# --- MODERN VE PROFESYONEL ARAYÜZ (CHAT_TEMPLATE) ---
 CHAT_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALAGÖZ - Güvenli Sohbet</title>
+    <title>ALAGÖZ - Güvenli İletişim</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 </head>
@@ -101,7 +100,7 @@ CHAT_TEMPLATE = """
         </section>
     </div>
 
-    <!-- JavaScript Haberleşme -->
+    <!-- JavaScript Haberleşme ve WebRTC Mantığı -->
     <script>
         const socket = io();
         const myId = "{{ current_user.custom_id }}";
@@ -111,10 +110,15 @@ CHAT_TEMPLATE = """
         let peerConnection = null;
         let inCall = false;
 
-        const iceServers = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        const iceServers = { 
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ] 
+        };
 
         socket.on('connect', () => {
-            console.log("Sunucuya bağlandı, ID:", myId);
+            console.log("Socket bağlandı. Benim ID:", myId);
         });
 
         function fetchUsers() {
@@ -213,7 +217,7 @@ CHAT_TEMPLATE = """
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // WebRTC Sesli Görüşme
+        // --- WEB-RTC SESLİ GÖRÜŞME MANTIĞI ---
         async function toggleAudioCall() {
             const btn = document.getElementById('call-btn');
             if(!inCall) {
@@ -236,30 +240,46 @@ CHAT_TEMPLATE = """
         }
 
         function setupPeer() {
+            if (peerConnection) return;
             peerConnection = new RTCPeerConnection(iceServers);
-            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+            }
             
             peerConnection.ontrack = e => {
                 const remoteAudio = document.getElementById('remote-audio');
                 remoteAudio.srcObject = e.streams[0];
-                remoteAudio.play();
+                remoteAudio.play().catch(err => console.log("Ses oynatma hatası:", err));
             };
             
             peerConnection.onicecandidate = e => {
-                if(e.candidate) socket.emit('voice', { sender_id: myId, target_id: targetId, type: 'candidate', candidate: e.candidate });
+                if(e.candidate) {
+                    socket.emit('voice', { sender_id: myId, target_id: targetId, type: 'candidate', candidate: e.candidate });
+                }
             };
         }
 
         socket.on('voice', async data => {
+            if(data.sender_id !== targetId && data.target_id === myId) {
+                targetId = data.sender_id; // Gelen çağrıyı otomatik hedef yap
+            }
+
             if(!peerConnection) setupPeer();
+
             if(data.type === 'offer') {
                 if(!inCall) {
-                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
-                    inCall = true;
-                    const btn = document.getElementById('call-btn');
-                    btn.className = "px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-red-600/20 flex items-center gap-1.5";
-                    btn.innerHTML = "🔴 Aramayı Kapat";
+                    try {
+                        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+                        inCall = true;
+                        const btn = document.getElementById('call-btn');
+                        btn.className = "px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-red-600/20 flex items-center gap-1.5";
+                        btn.innerHTML = "🔴 Aramayı Kapat";
+                    } catch(e) {
+                        alert("Gelen çağrı için mikrofon izni gerekiyor.");
+                        return;
+                    }
                 }
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
                 const answer = await peerConnection.createAnswer();
@@ -268,22 +288,35 @@ CHAT_TEMPLATE = """
             } else if(data.type === 'answer') {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
             } else if(data.type === 'candidate') {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                } catch(err) {
+                    console.log("ICE candidate eklenirken hata:", err);
+                }
             } else if(data.type === 'hangup') {
-                hangUp();
+                resetCallState();
             }
         });
 
         function hangUp() {
+            socket.emit('voice', { sender_id: myId, target_id: targetId, type: 'hangup' });
+            resetCallState();
+        }
+
+        function resetCallState() {
             if(localStream) localStream.getTracks().forEach(t => t.stop());
-            if(peerConnection) peerConnection.close();
-            peerConnection = null; localStream = null; inCall = false;
+            if(peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            localStream = null;
+            inCall = false;
             
             const btn = document.getElementById('call-btn');
-            btn.className = "px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-emerald-600/20 flex items-center gap-1.5";
-            btn.innerHTML = "📞 Sesli Aramayı Başlat";
-            
-            socket.emit('voice', { sender_id: myId, target_id: targetId, type: 'hangup' });
+            if(btn) {
+                btn.className = "px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/20 flex items-center gap-1.5";
+                btn.innerHTML = "📞 Sesli Aramayı Başlat";
+            }
         }
     </script>
 </body>
@@ -444,16 +477,20 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-# --- SOCKET.IO HABERLEŞME ODALARI ---
+# --- KESİN EŞLEŞEN SOCKET.IO ODA YÖNETİMİ ---
+
+def get_room_name(id1, id2):
+    # İki ID'yi alfabetik olarak sıralayarak her iki tarafta da %100 aynı oda adını üretir
+    return '_'.join(sorted([str(id1), str(id2)]))
 
 @socketio.on('join_room_private')
 def on_join(data):
-    room = ''.join(sorted([str(data['user1']), str(data['user2'])]))
+    room = get_room_name(data['user1'], data['user2'])
     join_room(room)
 
 @socketio.on('send_msg')
 def handle_msg(data):
-    room = ''.join(sorted([str(data['sender_id']), str(data['receiver_id'])]))
+    room = get_room_name(data['sender_id'], data['receiver_id'])
     emit('receive_msg', {
         'sender_id': data['sender_id'],
         'sender_name': data['sender_name'],
@@ -462,7 +499,7 @@ def handle_msg(data):
 
 @socketio.on('voice')
 def handle_voice(data):
-    room = ''.join(sorted([str(data['sender_id']), str(data['target_id'])]))
+    room = get_room_name(data['sender_id'], data['target_id'])
     emit('voice', data, room=room, include_self=False)
 
 if __name__ == '__main__':
